@@ -6,18 +6,29 @@ const { uid } = require('uid');
 const Redis = require('ioredis');
 
 const prisma = new PrismaClient();
-const redis = new Redis();
+const redis = new Redis(process.env.REDIS_URL || 'redis://localhost:6379', {
+    tls: process.env.REDIS_URL ? { rejectUnauthorized: false } : undefined,
+});
 
-const SPOTIFY_CLIENT_ID = process.env.VITE_SPOTIFY_CLIENT_ID || process.env.SPOTIFY_CLIENT_ID;
-const SPOTIFY_CLIENT_SECRET = process.env.VITE_SPOTIFY_CLIENT_SECRET || process.env.SPOTIFY_CLIENT_SECRET;
-const REDIRECT_URI = 'http://127.0.0.1:3000/api/auth/callback';
+const SPOTIFY_CLIENT_ID = process.env.SPOTIFY_CLIENT_ID;
+const SPOTIFY_CLIENT_SECRET = process.env.SPOTIFY_CLIENT_SECRET;
+const IS_PRODUCTION = process.env.NODE_ENV === 'production';
+const FRONTEND_URL = process.env.FRONTEND_URL || 'http://127.0.0.1:5173';
+const BACKEND_URL = process.env.BACKEND_URL || 'http://127.0.0.1:3000';
+const REDIRECT_URI = `${BACKEND_URL}/api/auth/callback`;
+
 const SCOPES = ['playlist-read-private', 'playlist-read-collaborative', 'playlist-modify-public', 'playlist-modify-private', 'user-read-private'];
 
 // 1. Generate Login URL
 router.get('/login', (req, res) => {
     const state = uid();
 
-    res.cookie('spotify_auth_state', state, { httpOnly: true, secure: false, maxAge: 1000 * 60 * 15 });
+    res.cookie('spotify_auth_state', state, {
+        httpOnly: true,
+        secure: IS_PRODUCTION,
+        sameSite: IS_PRODUCTION ? 'none' : 'lax',
+        maxAge: 1000 * 60 * 15
+    });
 
     const params = new URLSearchParams({
         response_type: 'code',
@@ -30,9 +41,7 @@ router.get('/login', (req, res) => {
 
     const authUrl = `https://accounts.spotify.com/authorize?${params.toString()}`;
     console.log('Redirecting to Spotify with:');
-    console.log('  Client ID:', SPOTIFY_CLIENT_ID);
     console.log('  Redirect URI:', REDIRECT_URI);
-    console.log('  Full URL:', authUrl);
     res.redirect(authUrl);
 });
 
@@ -43,7 +52,7 @@ router.get('/callback', async (req, res) => {
     const storedState = req.cookies ? req.cookies.spotify_auth_state : null;
 
     if (state === null || state !== storedState) {
-        return res.redirect('http://127.0.0.1:5173/?error=state_mismatch');
+        return res.redirect(`${FRONTEND_URL}/?error=state_mismatch`);
     }
 
     res.clearCookie('spotify_auth_state');
@@ -81,7 +90,7 @@ router.get('/callback', async (req, res) => {
         // Create a session ID
         const sessionId = uid();
 
-        // Store access token in Redis
+        // Store tokens in Redis
         await redis.set(`session:${sessionId}:access_token`, access_token, 'EX', expires_in);
         await redis.set(`session:${sessionId}:user_id`, user.id, 'EX', 60 * 60 * 24 * 7);
         await redis.set(`session:${sessionId}:refresh_token`, refresh_token, 'EX', 60 * 60 * 24 * 7);
@@ -89,15 +98,16 @@ router.get('/callback', async (req, res) => {
         // Send session cookie to frontend
         res.cookie('moodmuse_session', sessionId, {
             httpOnly: true,
-            secure: false,
+            secure: IS_PRODUCTION,
+            sameSite: IS_PRODUCTION ? 'none' : 'lax',
             maxAge: 1000 * 60 * 60 * 24 * 7
         });
 
-        res.redirect('http://127.0.0.1:5173/profile');
+        res.redirect(`${FRONTEND_URL}/profile`);
 
     } catch (error) {
         console.error('Error during token exchange:', error.response?.data || error.message);
-        res.redirect('http://127.0.0.1:5173/?error=invalid_token');
+        res.redirect(`${FRONTEND_URL}/?error=invalid_token`);
     }
 });
 

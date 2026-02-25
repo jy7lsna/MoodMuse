@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import axios from 'axios';
 import { RefreshCw, Sparkles, Check, Wand2 } from 'lucide-react';
+import API_BASE from '../config/api';
 
 function Analyze() {
     const { id } = useParams();
@@ -16,7 +17,7 @@ function Analyze() {
     useEffect(() => {
         const analyze = async () => {
             try {
-                const res = await axios.post(`/api/playlists/${id}/analyze`, {}, {
+                const res = await axios.post(`${API_BASE}/api/playlists/${id}/analyze`, {}, {
                     withCredentials: true
                 });
                 setResult(res.data);
@@ -39,7 +40,7 @@ function Analyze() {
 
         setApplying(true);
         try {
-            await axios.put(`/api/playlists/${id}/rename`, {
+            await axios.put(`${API_BASE}/api/playlists/${id}/rename`, {
                 newName: finalName,
                 vibeLabel: result.vibeLabel
             }, {

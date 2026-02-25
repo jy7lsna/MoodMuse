@@ -7,7 +7,9 @@ const { analyzePlaylist } = require('../services/analyzer');
 const { generateNamesFromVector } = require('../services/gemini');
 
 const prisma = new PrismaClient();
-const redis = new Redis();
+const redis = new Redis(process.env.REDIS_URL || 'redis://localhost:6379', {
+    tls: process.env.REDIS_URL ? { rejectUnauthorized: false } : undefined,
+});
 
 // Middleware to get access token from session
 const requireAuth = async (req, res, next) => {

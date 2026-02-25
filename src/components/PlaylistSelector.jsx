@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { Music } from 'lucide-react';
+import API_BASE from '../config/api';
 
 function PlaylistSelector({ userProfile }) {
     const navigate = useNavigate();
@@ -17,7 +18,7 @@ function PlaylistSelector({ userProfile }) {
 
         const fetchPlaylists = async () => {
             try {
-                const response = await axios.get('/api/playlists', {
+                const response = await axios.get(`${API_BASE}/api/playlists`, {
                     withCredentials: true
                 });
                 setPlaylists(response.data);
@@ -60,7 +61,7 @@ function PlaylistSelector({ userProfile }) {
                     <p className="text-muted">Select one of your playlists to generate a hyper-specific Gen-Z title for it.</p>
                 </div>
                 <button className="btn-text" onClick={async () => {
-                    await axios.post('/api/auth/logout', {}, { withCredentials: true });
+                    await axios.post(`${API_BASE}/api/auth/logout`, {}, { withCredentials: true });
                     window.location.href = '/';
                 }}>Log out</button>
             </div>

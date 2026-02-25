@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Routes, Route } from 'react-router-dom';
 import axios from 'axios';
+import API_BASE from './config/api';
 
 import Navbar from './components/Navbar';
 import PlaylistSelector from './components/PlaylistSelector';
@@ -36,7 +37,7 @@ function App() {
     useEffect(() => {
         const checkAuth = async () => {
             try {
-                const res = await axios.get('/api/auth/me', { withCredentials: true });
+                const res = await axios.get(`${API_BASE}/api/auth/me`, { withCredentials: true });
                 if (res.data && res.data.id) {
                     setUserProfile({
                         name: res.data.display_name,

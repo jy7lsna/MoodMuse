@@ -8,14 +8,14 @@ const Redis = require('ioredis');
 const app = express();
 const prisma = new PrismaClient();
 
-// Graceful Redis connection with error handling
-const redis = new Redis({
+// Redis: use REDIS_URL for production (Upstash), default to localhost for dev
+const redis = new Redis(process.env.REDIS_URL || 'redis://localhost:6379', {
     retryStrategy(times) {
         const delay = Math.min(times * 200, 5000);
         return delay;
     },
     maxRetriesPerRequest: 3,
-    lazyConnect: false
+    tls: process.env.REDIS_URL ? { rejectUnauthorized: false } : undefined,
 });
 
 redis.on('error', (err) => {
@@ -26,12 +26,18 @@ redis.on('connect', () => {
     console.log('Redis connected successfully');
 });
 
+// CORS: allow frontend origin (Vercel in production, localhost in dev)
+const FRONTEND_URL = process.env.FRONTEND_URL || 'http://127.0.0.1:5173';
+
 app.use(express.json());
 app.use(cors({
-    origin: 'http://localhost:5173',
+    origin: FRONTEND_URL,
     credentials: true
 }));
 app.use(cookieParser());
+
+// Make redis available to routes
+app.set('redis', redis);
 
 // Routes
 const authRoutes = require('./routes/auth');
