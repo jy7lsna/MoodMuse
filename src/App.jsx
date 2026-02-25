@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Routes, Route } from 'react-router-dom';
+import axios from 'axios';
 
 import Navbar from './components/Navbar';
-import Callback from './components/Callback';
 import PlaylistSelector from './components/PlaylistSelector';
 import Home from './components/Home';
 import Recommendations from './components/Recommendations';
@@ -11,16 +11,14 @@ import Analyze from './components/Analyze';
 import Export from './components/Export';
 import { ToastContainer } from './components/Toast';
 
-import { getUserProfileAndPlaylists } from './services/spotify';
-
 function App() {
     const [seedTrack, setSeedTrack] = useState(null);
     const [playlist, setPlaylist] = useState([]);
     const [finalName, setFinalName] = useState('');
 
-    // Auth State
-    const [userToken, setUserToken] = useState(localStorage.getItem('spotify_user_token') || null);
+    // Auth State — now driven by backend session cookie
     const [userProfile, setUserProfile] = useState(null);
+    const [authLoading, setAuthLoading] = useState(true);
 
     // Toast State
     const [toasts, setToasts] = useState([]);
@@ -34,28 +32,33 @@ function App() {
         setToasts(prev => prev.filter(t => t.id !== id));
     }, []);
 
-    // Fetch profile automatically if we have a token on load
+    // Check if user is logged in via backend session cookie
     useEffect(() => {
-        if (userToken && !userProfile) {
-            const fetchProfile = async () => {
-                const data = await getUserProfileAndPlaylists(userToken);
-                if (data && data.profile) {
-                    setUserProfile(data.profile);
-                } else {
-                    setUserToken(null);
-                    localStorage.removeItem('spotify_user_token');
+        const checkAuth = async () => {
+            try {
+                const res = await axios.get('/api/auth/me', { withCredentials: true });
+                if (res.data && res.data.id) {
+                    setUserProfile({
+                        name: res.data.display_name,
+                        image: res.data.images?.[0]?.url || null,
+                        id: res.data.id
+                    });
                 }
-            };
-            fetchProfile();
-        }
-    }, [userToken, userProfile]);
+            } catch (err) {
+                // Not logged in — that's fine
+                setUserProfile(null);
+            } finally {
+                setAuthLoading(false);
+            }
+        };
+        checkAuth();
+    }, []);
 
     return (
         <>
             <Navbar userProfile={userProfile} />
             <Routes>
                 <Route path="/" element={<Home setSeedTrack={setSeedTrack} setPlaylist={setPlaylist} addToast={addToast} />} />
-                <Route path="/callback" element={<Callback setUserToken={setUserToken} />} />
                 <Route path="/profile" element={<PlaylistSelector userProfile={userProfile} />} />
                 <Route path="/analyze/:id" element={<Analyze />} />
                 <Route path="/export" element={<Export />} />

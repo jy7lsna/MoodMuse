@@ -587,12 +587,19 @@ a {
     box-shadow: var(--shadow-brutal);
 }
 
+.feature-card:nth-child(4) {
+    background: var(--pink-soft) !important;
+    box-shadow: var(--shadow-brutal);
+}
+
 .feature-card:nth-child(1) h3,
 .feature-card:nth-child(1) p,
 .feature-card:nth-child(2) h3,
 .feature-card:nth-child(2) p,
 .feature-card:nth-child(3) h3,
-.feature-card:nth-child(3) p {
+.feature-card:nth-child(3) p,
+.feature-card:nth-child(4) h3,
+.feature-card:nth-child(4) p {
     color: var(--text-dark) !important;
 }
 

@@ -2,7 +2,7 @@ const express = require('express');
 const axios = require('axios');
 const router = express.Router();
 const { PrismaClient } = require('@prisma/client');
-const { v4: uuidv4 } = require('uid');
+const { uid } = require('uid');
 const Redis = require('ioredis');
 
 const prisma = new PrismaClient();
@@ -10,12 +10,12 @@ const redis = new Redis();
 
 const SPOTIFY_CLIENT_ID = process.env.VITE_SPOTIFY_CLIENT_ID || process.env.SPOTIFY_CLIENT_ID;
 const SPOTIFY_CLIENT_SECRET = process.env.VITE_SPOTIFY_CLIENT_SECRET || process.env.SPOTIFY_CLIENT_SECRET;
-const REDIRECT_URI = 'http://localhost:3000/api/auth/callback';
+const REDIRECT_URI = 'http://127.0.0.1:3000/api/auth/callback';
 const SCOPES = ['playlist-read-private', 'playlist-read-collaborative', 'playlist-modify-public', 'playlist-modify-private', 'user-read-private'];
 
 // 1. Generate Login URL
 router.get('/login', (req, res) => {
-    const state = uuidv4();
+    const state = uid();
 
     res.cookie('spotify_auth_state', state, { httpOnly: true, secure: false, maxAge: 1000 * 60 * 15 });
 
@@ -28,7 +28,12 @@ router.get('/login', (req, res) => {
         show_dialog: 'true'
     });
 
-    res.redirect(`https://accounts.spotify.com/authorize?${params.toString()}`);
+    const authUrl = `https://accounts.spotify.com/authorize?${params.toString()}`;
+    console.log('Redirecting to Spotify with:');
+    console.log('  Client ID:', SPOTIFY_CLIENT_ID);
+    console.log('  Redirect URI:', REDIRECT_URI);
+    console.log('  Full URL:', authUrl);
+    res.redirect(authUrl);
 });
 
 // 2. Handle Callback
@@ -38,7 +43,7 @@ router.get('/callback', async (req, res) => {
     const storedState = req.cookies ? req.cookies.spotify_auth_state : null;
 
     if (state === null || state !== storedState) {
-        return res.redirect('http://localhost:5173/?error=state_mismatch');
+        return res.redirect('http://127.0.0.1:5173/?error=state_mismatch');
     }
 
     res.clearCookie('spotify_auth_state');
@@ -74,7 +79,7 @@ router.get('/callback', async (req, res) => {
         });
 
         // Create a session ID
-        const sessionId = uuidv4();
+        const sessionId = uid();
 
         // Store access token in Redis
         await redis.set(`session:${sessionId}:access_token`, access_token, 'EX', expires_in);
@@ -88,11 +93,11 @@ router.get('/callback', async (req, res) => {
             maxAge: 1000 * 60 * 60 * 24 * 7
         });
 
-        res.redirect('http://localhost:5173/profile');
+        res.redirect('http://127.0.0.1:5173/profile');
 
     } catch (error) {
         console.error('Error during token exchange:', error.response?.data || error.message);
-        res.redirect('http://localhost:5173/?error=invalid_token');
+        res.redirect('http://127.0.0.1:5173/?error=invalid_token');
     }
 });
 

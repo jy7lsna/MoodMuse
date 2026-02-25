@@ -19,7 +19,7 @@ function Navbar({ userProfile }) {
                         {userProfile.name}
                     </button>
                 ) : (
-                    <button className="btn btn-primary btn-sm flex-center" onClick={() => window.location.href = getLoginUrl()}>
+                    <button className="btn btn-primary btn-sm flex-center" onClick={() => window.location.href = '/api/auth/login'}>
                         <LogIn size={18} className="mr-2" /> Login with Spotify
                     </button>
                 )}

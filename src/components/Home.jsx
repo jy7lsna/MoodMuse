@@ -145,6 +145,13 @@ function Home({ setSeedTrack, setPlaylist, addToast }) {
                             <h3>Gen-Z Naming</h3>
                             <p className="text-muted">No more "My Playlist #45". Let our AI write the perfect hyper-specific cultural title.</p>
                         </div>
+                        <div className="card feature-card">
+                            <div className="feature-icon-wrapper">
+                                <Zap size={22} />
+                            </div>
+                            <h3>Spotify Integration</h3>
+                            <p className="text-muted">Log in, pick a playlist, and apply your new name directly back to Spotify with one click.</p>
+                        </div>
                     </div>
                 </section>
             </div>

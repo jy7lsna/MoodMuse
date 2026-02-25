@@ -17,7 +17,7 @@ function PlaylistSelector({ userProfile }) {
 
         const fetchPlaylists = async () => {
             try {
-                const response = await axios.get('http://localhost:3000/api/playlists', {
+                const response = await axios.get('/api/playlists', {
                     withCredentials: true
                 });
                 setPlaylists(response.data);
@@ -25,7 +25,7 @@ function PlaylistSelector({ userProfile }) {
                 console.error(err);
                 if (err.response?.status === 401) {
                     setError("Session expired. Please log in again.");
-                    localStorage.removeItem('spotify_user_token');
+                    // Session expired
                 } else {
                     setError("Failed to fetch your playlists. Check backend connection.");
                 }
@@ -59,8 +59,8 @@ function PlaylistSelector({ userProfile }) {
                     <h1 className="mb-2">Hey, {userProfile?.name || 'there'}!</h1>
                     <p className="text-muted">Select one of your playlists to generate a hyper-specific Gen-Z title for it.</p>
                 </div>
-                <button className="btn-text" onClick={() => {
-                    localStorage.removeItem('spotify_user_token');
+                <button className="btn-text" onClick={async () => {
+                    await axios.post('/api/auth/logout', {}, { withCredentials: true });
                     window.location.href = '/';
                 }}>Log out</button>
             </div>

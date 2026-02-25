@@ -16,7 +16,7 @@ function Analyze() {
     useEffect(() => {
         const analyze = async () => {
             try {
-                const res = await axios.post(`http://localhost:3000/api/playlists/${id}/analyze`, {}, {
+                const res = await axios.post(`/api/playlists/${id}/analyze`, {}, {
                     withCredentials: true
                 });
                 setResult(res.data);
@@ -39,7 +39,7 @@ function Analyze() {
 
         setApplying(true);
         try {
-            await axios.put(`http://localhost:3000/api/playlists/${id}/rename`, {
+            await axios.put(`/api/playlists/${id}/rename`, {
                 newName: finalName,
                 vibeLabel: result.vibeLabel
             }, {
