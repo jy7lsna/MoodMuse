@@ -10,15 +10,13 @@ const redis = new Redis();
 
 const SPOTIFY_CLIENT_ID = process.env.VITE_SPOTIFY_CLIENT_ID || process.env.SPOTIFY_CLIENT_ID;
 const SPOTIFY_CLIENT_SECRET = process.env.VITE_SPOTIFY_CLIENT_SECRET || process.env.SPOTIFY_CLIENT_SECRET;
-const REDIRECT_URI = 'http://localhost:3000/api/auth/callback'; // Backend callback
+const REDIRECT_URI = 'http://localhost:3000/api/auth/callback';
 const SCOPES = ['playlist-read-private', 'playlist-read-collaborative', 'playlist-modify-public', 'playlist-modify-private', 'user-read-private'];
 
 // 1. Generate Login URL
 router.get('/login', (req, res) => {
-    // Generate random state for CSRF protection
     const state = uuidv4();
 
-    // In production, store state in redis or a signed cookie to verify it later
     res.cookie('spotify_auth_state', state, { httpOnly: true, secure: false, maxAge: 1000 * 60 * 15 });
 
     const params = new URLSearchParams({
@@ -68,7 +66,7 @@ router.get('/callback', async (req, res) => {
         // Upsert user in db
         const user = await prisma.user.upsert({
             where: { spotify_user_id: spotifyUserId },
-            update: { encrypted_refresh_token: refresh_token }, // In prod, actually encrypt this
+            update: { encrypted_refresh_token: refresh_token },
             create: {
                 spotify_user_id: spotifyUserId,
                 encrypted_refresh_token: refresh_token
@@ -78,18 +76,18 @@ router.get('/callback', async (req, res) => {
         // Create a session ID
         const sessionId = uuidv4();
 
-        // Store access token in redis
+        // Store access token in Redis
         await redis.set(`session:${sessionId}:access_token`, access_token, 'EX', expires_in);
-        await redis.set(`session:${sessionId}:user_id`, user.id, 'EX', 60 * 60 * 24 * 7); // 7 days
+        await redis.set(`session:${sessionId}:user_id`, user.id, 'EX', 60 * 60 * 24 * 7);
+        await redis.set(`session:${sessionId}:refresh_token`, refresh_token, 'EX', 60 * 60 * 24 * 7);
 
         // Send session cookie to frontend
         res.cookie('moodmuse_session', sessionId, {
             httpOnly: true,
-            secure: false, // Must be true in prod behind HTTPS
-            maxAge: 1000 * 60 * 60 * 24 * 7 // 7 days
+            secure: false,
+            maxAge: 1000 * 60 * 60 * 24 * 7
         });
 
-        // Redirect back to frontend
         res.redirect('http://localhost:5173/profile');
 
     } catch (error) {
@@ -98,15 +96,51 @@ router.get('/callback', async (req, res) => {
     }
 });
 
-// 3. User Info & Session Check
+// --- Token Refresh Helper ---
+async function refreshAccessToken(sessionId) {
+    const refreshToken = await redis.get(`session:${sessionId}:refresh_token`);
+    if (!refreshToken) return null;
+
+    try {
+        const tokenResponse = await axios.post('https://accounts.spotify.com/api/token', new URLSearchParams({
+            grant_type: 'refresh_token',
+            refresh_token: refreshToken
+        }).toString(), {
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'Authorization': 'Basic ' + Buffer.from(`${SPOTIFY_CLIENT_ID}:${SPOTIFY_CLIENT_SECRET}`).toString('base64')
+            }
+        });
+
+        const { access_token, expires_in, refresh_token: newRefreshToken } = tokenResponse.data;
+
+        // Update Redis with fresh tokens
+        await redis.set(`session:${sessionId}:access_token`, access_token, 'EX', expires_in);
+        if (newRefreshToken) {
+            await redis.set(`session:${sessionId}:refresh_token`, newRefreshToken, 'EX', 60 * 60 * 24 * 7);
+        }
+
+        console.log('Token refreshed successfully for session:', sessionId);
+        return access_token;
+    } catch (error) {
+        console.error('Token refresh failed:', error.response?.data || error.message);
+        return null;
+    }
+}
+
+// 3. User Info & Session Check (with auto-refresh)
 router.get('/me', async (req, res) => {
     const sessionId = req.cookies.moodmuse_session;
     if (!sessionId) return res.status(401).json({ error: 'Not authenticated' });
 
-    const accessToken = await redis.get(`session:${sessionId}:access_token`);
+    let accessToken = await redis.get(`session:${sessionId}:access_token`);
+
+    // If token expired, try refresh
     if (!accessToken) {
-        // TODO: Implement refresh logic here
-        return res.status(401).json({ error: 'Token expired' });
+        accessToken = await refreshAccessToken(sessionId);
+        if (!accessToken) {
+            return res.status(401).json({ error: 'Token expired and refresh failed. Please log in again.' });
+        }
     }
 
     try {
@@ -115,8 +149,39 @@ router.get('/me', async (req, res) => {
         });
         res.json(userProfileResponse.data);
     } catch (e) {
+        // If the API call fails with 401, try refreshing once more
+        if (e.response?.status === 401) {
+            accessToken = await refreshAccessToken(sessionId);
+            if (accessToken) {
+                try {
+                    const retryResponse = await axios.get('https://api.spotify.com/v1/me', {
+                        headers: { 'Authorization': `Bearer ${accessToken}` }
+                    });
+                    return res.json(retryResponse.data);
+                } catch (retryErr) {
+                    return res.status(401).json({ error: 'Session expired' });
+                }
+            }
+        }
         res.status(500).json({ error: 'Failed to fetch user' });
     }
 });
 
+// 4. Logout
+router.post('/logout', async (req, res) => {
+    const sessionId = req.cookies.moodmuse_session;
+
+    if (sessionId) {
+        // Clean up Redis
+        await redis.del(`session:${sessionId}:access_token`);
+        await redis.del(`session:${sessionId}:user_id`);
+        await redis.del(`session:${sessionId}:refresh_token`);
+    }
+
+    res.clearCookie('moodmuse_session');
+    res.json({ success: true, message: 'Logged out successfully' });
+});
+
+// Export the refresh function so playlists route can use it
 module.exports = router;
+module.exports.refreshAccessToken = refreshAccessToken;
